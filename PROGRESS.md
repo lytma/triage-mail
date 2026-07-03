@@ -10,8 +10,8 @@ first unchecked milestone. Do NOT redo checked milestones.
 ## Milestones
 
 - [x] **0. Scaffold prep** — Next.js + Prisma + Tailwind + deps, config, docs, dev DB/Redis, prep commit
-- [~] **1. Prisma schema, worker skeleton, base tooling** — schema validates + migrates, worker boots, build passes, home renders. (Auth.js config + sidebar shell pending in M1/M2.)
-- [ ] **2. Auth, roles, tenant isolation** — credentials+Google+MS login, demo session, Prisma tenant middleware + RLS, reconnect banner, noindex
+- [x] **1. Prisma schema, worker skeleton, base tooling** — schema validates + migrates, worker boots, build passes, home renders. (Auth.js config + sidebar shell pending in M1/M2.)
+- [x] **2. Auth, roles, tenant isolation** — credentials+Google+MS login, demo session, Prisma tenant middleware + RLS, reconnect banner, noindex
 - [x] **3. Review queue + category folder CRUD** — endpoints + screens, keyboard shortcuts, multi-select, bulk-archive, optimistic undo
 - [x] **4. Triage engine** — rules parse/eval, OpenAI (stub) classify, triage worker pipeline, low-confidence, stats rollup
 - [x] **5. Mailbox connect + sync + two-way actions** — provider adapters, OAuth, webhooks, mailbox-action/sync-back/token-refresh workers
