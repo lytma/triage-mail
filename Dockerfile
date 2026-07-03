@@ -35,27 +35,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME=0.0.0.0
 
-# Standalone server + static assets + public.
+# Lean standalone server + static assets + public. DB migration + seeding run in
+# the dedicated `migrate` init service (docker-compose.yml), which uses the worker
+# image's complete, correctly-linked node_modules — so this stays minimal.
 COPY --from=build /app/.next/standalone ./
 COPY --from=build /app/.next/static ./.next/static
 COPY --from=build /app/public ./public
 
-# Prisma CLI + engines + schema/migrations + seed for migrate/seed on boot.
-COPY --from=build /app/node_modules/prisma ./node_modules/prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=build /app/node_modules/tsx ./node_modules/tsx
-COPY --from=build /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
-COPY --from=build /app/node_modules/dotenv ./node_modules/dotenv
-# Seed + its imports resolve against src via tsx path alias.
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/src ./src
-COPY --from=build /app/tsconfig.json ./tsconfig.json
-COPY --from=build /app/package.json ./package.json
-COPY docker-entrypoint.sh ./docker-entrypoint.sh
-RUN chmod +x ./docker-entrypoint.sh
-
 EXPOSE 3000
-ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "server.js"]

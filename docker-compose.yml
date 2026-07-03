@@ -7,6 +7,20 @@
 # container port (ephemeral host port); backing services publish NO host port.
 
 services:
+  # One-shot DB init: migrations + idempotent seed. Uses the worker image (full,
+  # correctly-linked node_modules). web + worker wait for it to complete.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    command: ["./docker-migrate.sh"]
+    env_file:
+      - .env.preview
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
   web:
     build:
       context: .
@@ -21,6 +35,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
@@ -40,8 +56,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-      web:
-        condition: service_started
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   postgres:

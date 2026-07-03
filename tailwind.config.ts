@@ -38,7 +38,7 @@ const config: Config = {
           foreground: "#FFFFFF",
         },
         success: {
-          DEFAULT: "#16A34A",
+          DEFAULT: "#15803D",
           foreground: "#FFFFFF",
         },
         warning: {

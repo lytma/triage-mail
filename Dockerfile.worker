@@ -32,5 +32,7 @@ COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
 COPY src ./src
 COPY tsconfig.json ./tsconfig.json
+COPY docker-migrate.sh ./docker-migrate.sh
+RUN chmod +x ./docker-migrate.sh
 
 CMD ["node_modules/.bin/tsx", "src/workers/index.ts"]
