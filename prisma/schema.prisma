@@ -1,0 +1,378 @@
+// Triage Mail — Prisma schema.
+// Mirrors TECH_SPEC.md data schema exactly (table + column names via @map).
+// Auth fields (passwordHash, isAdmin, isDemo) are added to user_accounts to
+// support the always-works credentialed login + demo flagging — see ASSUMPTIONS.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum AuthProvider {
+  google
+  microsoft
+
+  @@map("auth_provider")
+}
+
+enum SubscriptionStatus {
+  trialing
+  active
+  past_due
+  canceled
+  expired
+
+  @@map("subscription_status")
+}
+
+enum SubscriptionPlan {
+  monthly
+  yearly
+
+  @@map("subscription_plan")
+}
+
+enum LedgerEntryType {
+  charge
+  refund
+  proration_credit
+  trial_start
+  trial_convert
+  cancellation
+
+  @@map("ledger_entry_type")
+}
+
+enum LedgerStatus {
+  pending
+  succeeded
+  failed
+  refunded
+
+  @@map("ledger_status")
+}
+
+enum MailboxProvider {
+  gmail
+  outlook
+
+  @@map("mailbox_provider")
+}
+
+enum SyncState {
+  active
+  paused
+  error
+  disconnected
+
+  @@map("sync_state")
+}
+
+enum Classification {
+  important
+  fyi
+  newsletter
+  marketing
+  receipt
+  automated_notification
+
+  @@map("classification")
+}
+
+enum ReviewItemStatus {
+  pending
+  replied
+  forwarded
+  archived
+  done
+
+  @@map("review_item_status")
+}
+
+// ---------- Models ----------
+
+model UserAccount {
+  id                  String             @id @default(uuid()) @db.Uuid
+  email               String             @unique @db.VarChar(255)
+  displayName         String             @map("display_name") @db.VarChar(255)
+  // Auth additions (see ASSUMPTIONS.md): credentialed login + role/demo flags.
+  passwordHash        String?            @map("password_hash") @db.Text
+  isAdmin             Boolean            @default(false) @map("is_admin")
+  isDemo              Boolean            @default(false) @map("is_demo")
+  authProvider        AuthProvider?      @map("auth_provider")
+  authProviderSubject String?            @map("auth_provider_subject") @db.VarChar(255)
+  subscriptionStatus  SubscriptionStatus @default(trialing) @map("subscription_status")
+  subscriptionPlan    SubscriptionPlan?  @map("subscription_plan")
+  stripeCustomerId    String?            @map("stripe_customer_id") @db.VarChar(255)
+  trialEndsAt         DateTime?          @map("trial_ends_at") @db.Timestamptz
+  createdAt           DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt           DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  subscription          Subscription?
+  ledgerEntries         SubscriptionLedgerEntry[]
+  connectedMailboxes    ConnectedMailbox[]
+  triageRules           TriageRule[]
+  categoryFolders       CategoryFolder[]
+  emailMetadata         EmailMetadata[]
+  triageDecisions       TriageDecision[]
+  reviewQueueItems      ReviewQueueItem[]
+  triageSummaryStats    TriageSummaryStat[]
+  notificationSubs      NotificationSubscription[]
+  events                Event[]
+
+  @@index([stripeCustomerId], name: "idx_user_accounts_stripe_customer")
+  @@map("user_accounts")
+}
+
+model Subscription {
+  id                   String             @id @default(uuid()) @db.Uuid
+  userAccountId        String             @unique @map("user_account_id") @db.Uuid
+  stripeSubscriptionId String?            @unique @map("stripe_subscription_id") @db.VarChar(255)
+  plan                 SubscriptionPlan
+  status               SubscriptionStatus @default(trialing)
+  currentPeriodStart   DateTime?          @map("current_period_start") @db.Timestamptz
+  currentPeriodEnd     DateTime?          @map("current_period_end") @db.Timestamptz
+  canceledAt           DateTime?          @map("canceled_at") @db.Timestamptz
+  trialStartedAt       DateTime?          @map("trial_started_at") @db.Timestamptz
+  trialEndsAt          DateTime?          @map("trial_ends_at") @db.Timestamptz
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount   UserAccount               @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  ledgerEntries SubscriptionLedgerEntry[]
+
+  @@index([userAccountId], name: "idx_subscriptions_user")
+  @@map("subscriptions")
+}
+
+model SubscriptionLedgerEntry {
+  id              String          @id @default(uuid()) @db.Uuid
+  subscriptionId  String          @map("subscription_id") @db.Uuid
+  userAccountId   String          @map("user_account_id") @db.Uuid
+  stripeInvoiceId String?         @map("stripe_invoice_id") @db.VarChar(255)
+  stripeChargeId  String?         @map("stripe_charge_id") @db.VarChar(255)
+  entryType       LedgerEntryType @map("entry_type")
+  amountCents     Decimal         @map("amount_cents") @db.Decimal(12, 2)
+  currency        String          @default("USD") @db.VarChar(3)
+  status          LedgerStatus    @default(pending)
+  description     String?         @db.Text
+  recordedAt      DateTime        @default(now()) @map("recorded_at") @db.Timestamptz
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  userAccount  UserAccount  @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId], name: "idx_ledger_subscription")
+  @@index([userAccountId], name: "idx_ledger_user")
+  @@index([stripeInvoiceId], name: "idx_ledger_stripe_invoice")
+  @@map("subscription_ledger_entries")
+}
+
+model ConnectedMailbox {
+  id                          String          @id @default(uuid()) @db.Uuid
+  userAccountId               String          @map("user_account_id") @db.Uuid
+  provider                    MailboxProvider
+  emailAddress                String          @map("email_address") @db.VarChar(255)
+  oauthRefreshTokenEncrypted  String          @map("oauth_refresh_token_encrypted") @db.Text
+  oauthAccessTokenEncrypted   String?         @map("oauth_access_token_encrypted") @db.Text
+  tokenExpiresAt              DateTime?       @map("token_expires_at") @db.Timestamptz
+  syncState                   SyncState       @default(active) @map("sync_state")
+  lastSyncedAt                DateTime?       @map("last_synced_at") @db.Timestamptz
+  lastSyncError               String?         @map("last_sync_error") @db.Text
+  providerHistoryId           String?         @map("provider_history_id") @db.VarChar(255)
+  createdAt                   DateTime        @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                   DateTime        @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount   UserAccount     @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  emailMetadata EmailMetadata[]
+
+  @@unique([userAccountId, emailAddress], name: "uq_mailboxes_user_email")
+  @@index([userAccountId], name: "idx_mailboxes_user")
+  @@map("connected_mailboxes")
+}
+
+model CategoryFolder {
+  id              String   @id @default(uuid()) @db.Uuid
+  userAccountId   String   @map("user_account_id") @db.Uuid
+  name            String   @db.VarChar(100)
+  slug            String   @db.VarChar(100)
+  isSystemDefault Boolean  @default(false) @map("is_system_default")
+  displayOrder    Int      @default(0) @map("display_order")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  userAccount   UserAccount     @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  emailMetadata EmailMetadata[]
+  triageRules   TriageRule[]
+
+  @@unique([userAccountId, slug], name: "uq_categories_user_slug")
+  @@index([userAccountId], name: "idx_categories_user")
+  @@map("category_folders")
+}
+
+model EmailMetadata {
+  id                     String    @id @default(uuid()) @db.Uuid
+  userAccountId          String    @map("user_account_id") @db.Uuid
+  connectedMailboxId     String    @map("connected_mailbox_id") @db.Uuid
+  providerMessageId      String    @map("provider_message_id") @db.VarChar(512)
+  providerThreadId       String?   @map("provider_thread_id") @db.VarChar(512)
+  senderEmail            String    @map("sender_email") @db.VarChar(255)
+  senderName             String?   @map("sender_name") @db.VarChar(255)
+  subject                String?   @db.VarChar(1000)
+  receivedAt             DateTime  @map("received_at") @db.Timestamptz
+  categoryFolderId       String?   @map("category_folder_id") @db.Uuid
+  isImportant            Boolean   @default(false) @map("is_important")
+  isFlaggedLowConfidence Boolean   @default(false) @map("is_flagged_low_confidence")
+  isArchived             Boolean   @default(false) @map("is_archived")
+  hasAttachments         Boolean   @default(false) @map("has_attachments")
+  createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount      UserAccount      @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  connectedMailbox ConnectedMailbox @relation(fields: [connectedMailboxId], references: [id], onDelete: Cascade)
+  categoryFolder   CategoryFolder?  @relation(fields: [categoryFolderId], references: [id], onDelete: SetNull)
+  triageDecision   TriageDecision?
+  reviewQueueItem  ReviewQueueItem?
+
+  @@unique([connectedMailboxId, providerMessageId], name: "uq_email_provider_msg")
+  @@index([userAccountId], name: "idx_email_user")
+  @@index([connectedMailboxId], name: "idx_email_mailbox")
+  @@index([categoryFolderId], name: "idx_email_category")
+  @@index([userAccountId, receivedAt(sort: Desc)], name: "idx_email_received")
+  @@map("email_metadata")
+}
+
+model TriageDecision {
+  id                  String         @id @default(uuid()) @db.Uuid
+  emailMetadataId     String         @unique @map("email_metadata_id") @db.Uuid
+  userAccountId       String         @map("user_account_id") @db.Uuid
+  classification      Classification
+  confidenceScore     Decimal        @map("confidence_score") @db.Decimal(4, 3)
+  reason              String?        @db.Text
+  finalCategory       Classification @map("final_category")
+  overriddenByRuleId  String?        @map("overridden_by_rule_id") @db.Uuid
+  llmModel            String         @map("llm_model") @db.VarChar(100)
+  llmPromptTokens     Int?           @map("llm_prompt_tokens")
+  llmCompletionTokens Int?           @map("llm_completion_tokens")
+  decidedAt           DateTime       @default(now()) @map("decided_at") @db.Timestamptz
+
+  emailMetadata EmailMetadata @relation(fields: [emailMetadataId], references: [id], onDelete: Cascade)
+  userAccount   UserAccount   @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  overriddenBy  TriageRule?   @relation(fields: [overriddenByRuleId], references: [id], onDelete: SetNull)
+
+  @@index([userAccountId], name: "idx_triage_user")
+  @@index([classification], name: "idx_triage_classification")
+  @@map("triage_decisions")
+}
+
+model TriageRule {
+  id                   String         @id @default(uuid()) @db.Uuid
+  userAccountId        String         @map("user_account_id") @db.Uuid
+  plainEnglishText     String         @map("plain_english_text") @db.Text
+  parsedConditions     Json           @map("parsed_conditions")
+  targetClassification Classification @map("target_classification")
+  targetCategoryFolderId String?      @map("target_category_folder_id") @db.Uuid
+  isActive             Boolean        @default(true) @map("is_active")
+  priority             Int            @default(0)
+  createdAt            DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt            DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount      UserAccount      @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  targetCategory   CategoryFolder?  @relation(fields: [targetCategoryFolderId], references: [id], onDelete: SetNull)
+  triageDecisions  TriageDecision[]
+
+  @@index([userAccountId], name: "idx_rules_user")
+  @@index([userAccountId, isActive, priority(sort: Desc)], name: "idx_rules_user_active_priority")
+  @@map("triage_rules")
+}
+
+model ReviewQueueItem {
+  id              String           @id @default(uuid()) @db.Uuid
+  userAccountId   String           @map("user_account_id") @db.Uuid
+  emailMetadataId String           @unique @map("email_metadata_id") @db.Uuid
+  importanceScore Decimal          @map("importance_score") @db.Decimal(4, 3)
+  status          ReviewItemStatus @default(pending)
+  clearedAt       DateTime?        @map("cleared_at") @db.Timestamptz
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount   UserAccount   @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+  emailMetadata EmailMetadata @relation(fields: [emailMetadataId], references: [id], onDelete: Cascade)
+
+  @@index([userAccountId, status], name: "idx_review_user_status")
+  @@index([userAccountId, status, importanceScore(sort: Desc), createdAt(sort: Desc)], name: "idx_review_user_pending")
+  @@map("review_queue_items")
+}
+
+model TriageSummaryStat {
+  id                        String   @id @default(uuid()) @db.Uuid
+  userAccountId             String   @map("user_account_id") @db.Uuid
+  statDate                  DateTime @map("stat_date") @db.Date
+  totalEmails               Int      @default(0) @map("total_emails")
+  importantCount            Int      @default(0) @map("important_count")
+  fyiCount                  Int      @default(0) @map("fyi_count")
+  newsletterCount           Int      @default(0) @map("newsletter_count")
+  marketingCount            Int      @default(0) @map("marketing_count")
+  receiptCount              Int      @default(0) @map("receipt_count")
+  automatedNotificationCount Int     @default(0) @map("automated_notification_count")
+  flaggedLowConfidenceCount Int      @default(0) @map("flagged_low_confidence_count")
+  queueClearedCount         Int      @default(0) @map("queue_cleared_count")
+  ruleOverriddenCount       Int      @default(0) @map("rule_overridden_count")
+  createdAt                 DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt                 DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([userAccountId, statDate], name: "uq_stats_user_date")
+  @@index([userAccountId, statDate(sort: Desc)], name: "idx_stats_user_date")
+  @@map("triage_summary_stats")
+}
+
+model NotificationSubscription {
+  id            String   @id @default(uuid()) @db.Uuid
+  userAccountId String   @map("user_account_id") @db.Uuid
+  endpoint      String   @db.Text
+  p256dhKey     String   @map("p256dh_key") @db.Text
+  authSecret    String   @map("auth_secret") @db.Text
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  userAccount UserAccount @relation(fields: [userAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([endpoint], name: "uq_notif_endpoint")
+  @@index([userAccountId], name: "idx_notif_user")
+  @@map("notification_subscriptions")
+}
+
+model DemoAccount {
+  id               String    @id @default(uuid()) @db.Uuid
+  demoToken        String    @unique @map("demo_token") @db.VarChar(255)
+  displayName      String    @map("display_name") @db.VarChar(255)
+  seedDataSnapshot Json      @map("seed_data_snapshot")
+  isActive         Boolean   @default(true) @map("is_active")
+  expiresAt        DateTime? @map("expires_at") @db.Timestamptz
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  @@index([isActive], name: "idx_demo_active")
+  @@map("demo_accounts")
+}
+
+model Event {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String?  @map("user_id") @db.Uuid
+  name       String   @db.VarChar(120)
+  occurredAt DateTime @default(now()) @map("occurred_at") @db.Timestamptz
+  props      Json?
+
+  user UserAccount? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([name])
+  @@index([occurredAt])
+  @@index([name, occurredAt], name: "idx_events_name_occurred")
+  @@map("events")
+}

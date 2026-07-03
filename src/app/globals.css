@@ -1,0 +1,105 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #2563eb;
+  --color-primary-fg: #ffffff;
+  --color-secondary: #475569;
+  --color-secondary-fg: #ffffff;
+  --color-accent: #f59e0b;
+  --color-accent-fg: #1c1917;
+  --color-bg: #ffffff;
+  --color-fg: #0f172a;
+  --color-muted: #f1f5f9;
+  --color-muted-fg: #475569;
+  --color-card: #ffffff;
+  --color-card-fg: #0f172a;
+  --color-border: #e2e8f0;
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-display: Inter, system-ui, sans-serif;
+  --text-base: 16px;
+  --scale-ratio: 1.25;
+  --radius: 0.5rem;
+  --radius-btn: 0.5rem;
+  --radius-card: 0.75rem;
+  --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --shadow-btn: none;
+  --logo-h: 50px;
+  --brand-size: 1.5rem;
+  --hero-size: 3.25rem;
+  --btn-weight: 600;
+  --btn-style: solid;
+  --tab-style: underline;
+  --density: cozy;
+  --nav-opacity: 100%;
+  --nav-blur: 8px;
+  --btn-bg: var(--color-primary);
+  --btn-fg: var(--color-primary-fg);
+  --btn-border: transparent;
+  --pad: 1rem;
+  --gap: 1rem;
+  --section-y: 4rem;
+  --tab-radius: 0px;
+  --tab-active-bg: transparent;
+  --tab-active-fg: var(--color-primary);
+  --tab-active-shadow: inset 0 -2px 0 var(--color-primary);
+  --nav-position: static;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    line-height: 1.6;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+  }
+  /* Visible focus states for keyboard-first accessibility (WCAG AA) */
+  :focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+  }
+}
+
+/* Marketing / landing page styles (ported from DESIGN_SPEC chosen mockup) */
+@layer components {
+  .mk-wrap {
+    width: 100%;
+    max-width: 1200px;
+    margin-inline: auto;
+    padding-inline: clamp(1.25rem, 4vw, 3rem);
+  }
+  .mk-eyebrow {
+    color: var(--color-primary);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: inline-block;
+    margin-bottom: 0.5rem;
+  }
+  .mk-hero-title {
+    font-family: var(--font-display);
+    font-size: var(--hero-size);
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    margin: 0 0 0.4em;
+  }
+  .mk-section-title {
+    font-family: var(--font-display);
+    font-size: 2rem;
+    line-height: 1.1;
+    margin: 0 0 0.5em;
+  }
+}
