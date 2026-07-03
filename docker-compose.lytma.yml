@@ -1,0 +1,70 @@
+# Synthesized by lytma — proxy-mode routing + (shared) storage.
+services:
+  web:
+    healthcheck:
+      disable: true
+    ports: !reset []
+    networks:
+      - default
+      - lytma_preview_net
+    environment:
+      OAUTH_BROKER_URL: "${OAUTH_BROKER_URL:-}"
+      OAUTH_BROKER_SECRET: "${OAUTH_BROKER_SECRET:-}"
+      PREVIEW_PUBLIC_URL: "${PREVIEW_PUBLIC_URL:-}"
+      APP_URL: "${APP_URL:-}"
+      AUTH_URL: "${AUTH_URL:-}"
+      DATABASE_URL: "${DATABASE_URL:-}"
+      REDIS_URL: "${REDIS_URL:-}"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=${PREVIEW_NETWORK}"
+      - "traefik.http.routers.prevcmr5jahtt001lraey3gytqtgx.rule=Host(`${PREVIEW_HOST}`)"
+      - "traefik.http.routers.prevcmr5jahtt001lraey3gytqtgx.entrypoints=websecure"
+      - "traefik.http.routers.prevcmr5jahtt001lraey3gytqtgx.tls=true"
+      - "traefik.http.services.prevcmr5jahtt001lraey3gytqtgx.loadbalancer.server.port=3000"
+    deploy:
+      resources:
+        limits:
+          memory: ${PREVIEW_MEM_LIMIT:-1g}
+          cpus: "${PREVIEW_CPU_LIMIT:-1}"
+  migrate:
+    networks:
+      - default
+      - lytma_preview_net
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+  worker:
+    networks:
+      - default
+      - lytma_preview_net
+    environment:
+      DATABASE_URL: "${DATABASE_URL:-}"
+      REDIS_URL: "${REDIS_URL:-}"
+  postgres:
+    image: busybox:stable
+    entrypoint: ["sleep", "infinity"]
+    command: !reset []
+    ports: !reset []
+    volumes: !reset []
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 3s
+      timeout: 2s
+      retries: 1
+      start_period: 1s
+  redis:
+    image: busybox:stable
+    entrypoint: ["sleep", "infinity"]
+    command: !reset []
+    ports: !reset []
+    volumes: !reset []
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 3s
+      timeout: 2s
+      retries: 1
+      start_period: 1s
+networks:
+  lytma_preview_net:
+    external: true
+    name: ${PREVIEW_NETWORK}
