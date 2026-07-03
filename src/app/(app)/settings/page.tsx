@@ -1,8 +1,26 @@
-export default function Page() {
+import { redirect } from "next/navigation";
+import { getSessionUser } from "@/server/lib/session";
+import { SettingsView } from "@/components/settings/settings-view";
+
+export const dynamic = "force-dynamic";
+
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ checkout?: string; connect?: string }>;
+}) {
+  const user = await getSessionUser();
+  if (!user) redirect("/signin");
+
+  const sp = await searchParams;
+
   return (
-    <div className="p-6 md:p-10">
-      <h1 className="text-2xl font-bold">Settings</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Coming in a later milestone.</p>
-    </div>
+    <SettingsView
+      isDemo={user.isDemo}
+      userEmail={user.email}
+      displayName={user.displayName}
+      checkoutStatus={sp.checkout}
+      connectStatus={sp.connect}
+    />
   );
 }

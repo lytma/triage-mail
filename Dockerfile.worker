@@ -1,0 +1,36 @@
+# syntax=docker/dockerfile:1.7
+# ---- Worker service (BullMQ consumers, tsx runtime) ----
+# Shares the deps layer strategy with the web image. Runs the worker entry via
+# tsx; needs the full toolchain (tsx + prisma client + source), pruned to prod deps.
+
+FROM node:20-bookworm-slim AS base
+ENV NODE_ENV=production
+WORKDIR /app
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM base AS deps
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+RUN --mount=type=cache,id=npm,target=/root/.npm \
+    npm ci --include=dev
+
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+RUN npx prisma generate
+
+# ---- runner: prod deps + source + generated client ----
+FROM base AS runner
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+COPY prisma ./prisma
+# Prod-only install, then graft the generated Prisma client + tsx from build.
+RUN --mount=type=cache,id=npm,target=/root/.npm \
+    npm ci --omit=dev
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
+COPY src ./src
+COPY tsconfig.json ./tsconfig.json
+
+CMD ["node_modules/.bin/tsx", "src/workers/index.ts"]

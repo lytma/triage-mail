@@ -1,0 +1,77 @@
+# Single deploy file for Triage Mail.
+# web + worker share one codebase (different images/commands). Postgres + Redis
+# are LOCAL-DEV conveniences only — the app runs unchanged against lytma's
+# managed Postgres/Redis via injected DATABASE_URL / REDIS_URL.
+#
+# Ports: lytma owns host-port binding. The web service publishes ONLY its
+# container port (ephemeral host port); backing services publish NO host port.
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.preview
+    # Container port only — lytma assigns/routes the host port. Never hardcode a host port.
+    ports:
+      - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    env_file:
+      - .env.preview
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      web:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: triage
+      POSTGRES_PASSWORD: triage
+      POSTGRES_DB: triage
+    # No published host port — internal only.
+    volumes:
+      - triage_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U triage -d triage"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    # No published host port — internal only.
+    volumes:
+      - triage_redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+volumes:
+  triage_pgdata:
+  triage_redisdata:
