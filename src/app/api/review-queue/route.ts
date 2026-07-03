@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { handle, json } from "@/server/lib/http";
 import { requireUser } from "@/server/lib/session";
 import { prisma } from "@/server/db/prisma";
@@ -16,7 +17,12 @@ export async function GET(req: Request) {
     const page = Math.max(1, Number(url.searchParams.get("page") ?? 1));
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get("limit") ?? 50)));
 
-    const where = { userAccountId: user.id, status: "pending" as const };
+    // Items remain in the queue after reply/forward (a badge, not a clear) — only
+    // archive/done removes them. So include replied/forwarded alongside pending.
+    const where: Prisma.ReviewQueueItemWhereInput = {
+      userAccountId: user.id,
+      status: { in: ["pending", "replied", "forwarded"] },
+    };
     const [rows, total] = await Promise.all([
       prisma.reviewQueueItem.findMany({
         where,

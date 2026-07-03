@@ -32,7 +32,7 @@ export default async function AppLayout({
       select: { id: true, emailAddress: true, provider: true },
     }),
     prisma.reviewQueueItem.count({
-      where: { userAccountId: user.id, status: "pending" },
+      where: { userAccountId: user.id, status: { in: ["pending", "replied", "forwarded"] } },
     }),
     prisma.userAccount.findUnique({
       where: { id: user.id },

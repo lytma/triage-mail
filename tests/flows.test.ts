@@ -93,14 +93,21 @@ describe("review queue ordering + clearing", () => {
     expect(stillPending.find((i) => i.id === pending[0].id)).toBeUndefined();
   });
 
-  it("replied status keeps the item in the queue (not cleared)", async () => {
+  it("replied/forwarded items REMAIN in the review queue (badge, not cleared)", async () => {
     const e = await makeEmail({ sender: "r@x.com", subject: "reply me", category: "important", important: true });
     const item = await prisma.reviewQueueItem.create({
       data: { userAccountId: user.id, emailMetadataId: e.id, importanceScore: 0.8, status: "replied" },
     });
-    // "replied" is not pending, but it is NOT archived/done — the PATCH sets it back
-    // conceptually. Here we assert replied != cleared statuses.
-    expect(["archived", "done"]).not.toContain(item.status);
+    // The review-queue list query must include pending + replied + forwarded.
+    const visible = await prisma.reviewQueueItem.findMany({
+      where: { userAccountId: user.id, status: { in: ["pending", "replied", "forwarded"] } },
+    });
+    expect(visible.find((i) => i.id === item.id)).toBeDefined();
+    // Archived/done are the only clearing statuses.
+    const cleared = await prisma.reviewQueueItem.findMany({
+      where: { userAccountId: user.id, status: { in: ["archived", "done"] } },
+    });
+    expect(cleared.find((i) => i.id === item.id)).toBeUndefined();
   });
 });
 
