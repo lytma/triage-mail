@@ -30,8 +30,10 @@ import { cn } from "@/lib/utils";
 import {
   ConfidenceBadge,
   ProviderIndicator,
+  MoveToMenu,
   confidenceIsLow,
   type Provider,
+  type MoveCategory,
 } from "./shared";
 
 export interface ReviewItem {
@@ -193,6 +195,42 @@ export function ReviewQueue({ isDemo }: { isDemo: boolean }) {
       router.push(`/compose?mode=${mode}&itemId=${item.id}`);
     },
     [router]
+  );
+
+  // --- Move to a different category (a manual correction the app learns from) ---
+  const moveItem = React.useCallback(
+    async (item: ReviewItem, category: MoveCategory) => {
+      if (category === "important") return; // already important
+      const idx = items.findIndex((i) => i.id === item.id);
+      setRemovingIds((prev) => new Set(prev).add(item.id));
+      window.setTimeout(() => {
+        setItems((prev) => prev.filter((i) => i.id !== item.id));
+        setRemovingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(item.id);
+          return next;
+        });
+        setSelectedId((prev) => {
+          if (prev !== item.id) return prev;
+          const remaining = items.filter((i) => i.id !== item.id);
+          return remaining[Math.min(idx, remaining.length - 1)]?.id ?? null;
+        });
+      }, 180);
+
+      try {
+        const res = await fetch(`/api/emails/${item.emailMetadataId}/move`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ classification: category }),
+        });
+        if (!res.ok) throw new Error();
+        toast.success("Moved — I'll file mail from this sender here from now on");
+      } catch {
+        setItems((prev) => (prev.some((i) => i.id === item.id) ? prev : [...prev, item]));
+        toast.error("Couldn't move — please try again");
+      }
+    },
+    [items]
   );
 
   // --- Keyboard shortcuts ---
@@ -376,6 +414,7 @@ export function ReviewQueue({ isDemo }: { isDemo: boolean }) {
                     onForward={() => goCompose(item, "forward")}
                     onArchive={() => void clearItem(item, "archived")}
                     onDone={() => void clearItem(item, "done")}
+                    onMove={(cat) => void moveItem(item, cat)}
                   />
                 ))}
               </ul>
@@ -457,6 +496,7 @@ interface RowProps {
   onForward: () => void;
   onArchive: () => void;
   onDone: () => void;
+  onMove: (category: MoveCategory) => void;
 }
 
 const ReviewRow = React.forwardRef<HTMLLIElement, RowProps>(function ReviewRow(
@@ -470,6 +510,7 @@ const ReviewRow = React.forwardRef<HTMLLIElement, RowProps>(function ReviewRow(
     onForward,
     onArchive,
     onDone,
+    onMove,
   },
   ref
 ) {
@@ -570,6 +611,11 @@ const ReviewRow = React.forwardRef<HTMLLIElement, RowProps>(function ReviewRow(
             label="Forward"
             onClick={onForward}
             icon={<Forward className="h-4 w-4" />}
+          />
+          <MoveToMenu
+            exclude="important"
+            stopPropagation
+            onMove={onMove}
           />
           <RowAction
             label="Archive"

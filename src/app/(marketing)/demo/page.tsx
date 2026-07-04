@@ -252,10 +252,10 @@ export default async function DemoPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-btn bg-background px-6 py-3 text-base font-semibold text-primary transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-foreground focus-visible:ring-offset-2 focus-visible:ring-offset-primary disabled:cursor-not-allowed disabled:opacity-70"
               />
               <Link
-                href="/pricing"
+                href="/signin"
                 className="text-sm font-semibold text-primary-foreground/90 underline-offset-4 hover:underline"
               >
-                Or see pricing plans
+                Or create your free account
               </Link>
             </div>
           </div>

@@ -1,11 +1,91 @@
 import * as React from "react";
-import { Mail } from "lucide-react";
+import { Mail, FolderInput } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 
-export type Provider = "gmail" | "outlook";
+export type Provider = "gmail" | "outlook" | "imap";
 
-/** Small colored provider indicator: Gmail = red-ish, Outlook = blue-ish. */
+/** The fixed category catalog a user can move an email into (Classification enum). */
+export type MoveCategory =
+  | "important"
+  | "fyi"
+  | "newsletter"
+  | "marketing"
+  | "receipt"
+  | "automated_notification";
+
+export const MOVE_CATEGORIES: { value: MoveCategory; label: string }[] = [
+  { value: "important", label: "Important (Review queue)" },
+  { value: "fyi", label: "FYI" },
+  { value: "newsletter", label: "Newsletters" },
+  { value: "marketing", label: "Marketing" },
+  { value: "receipt", label: "Receipts" },
+  { value: "automated_notification", label: "Automated Notifications" },
+];
+
+/**
+ * "Move to category" menu — lets the user correct a misclassification. The app
+ * learns from the move (instant per-sender rule + gradual AI feedback).
+ */
+export function MoveToMenu({
+  onMove,
+  exclude,
+  stopPropagation,
+}: {
+  onMove: (category: MoveCategory) => void;
+  /** Hide the current category from the list. */
+  exclude?: MoveCategory;
+  stopPropagation?: boolean;
+}) {
+  return (
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              aria-label="Move to category"
+              onClick={(e) => stopPropagation && e.stopPropagation()}
+            >
+              <FolderInput className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>Move to category</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end" onClick={(e) => stopPropagation && e.stopPropagation()}>
+        <DropdownMenuLabel>Move to…</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        {MOVE_CATEGORIES.filter((c) => c.value !== exclude).map((c) => (
+          <DropdownMenuItem key={c.value} onClick={() => onMove(c.value)}>
+            {c.label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+/**
+ * Small colored provider indicator: Gmail = red-ish, Outlook = blue-ish,
+ * IMAP (iCloud/Yahoo/Fastmail) = emerald.
+ */
 export function ProviderIndicator({
   provider,
   mailboxEmail,
@@ -15,8 +95,14 @@ export function ProviderIndicator({
   mailboxEmail?: string;
   className?: string;
 }) {
-  const isGmail = provider === "gmail";
-  const label = isGmail ? "Gmail" : "Outlook";
+  const label =
+    provider === "gmail" ? "Gmail" : provider === "outlook" ? "Outlook" : "IMAP";
+  const color =
+    provider === "gmail"
+      ? "bg-red-100 text-red-600"
+      : provider === "outlook"
+        ? "bg-blue-100 text-blue-600"
+        : "bg-emerald-100 text-emerald-700";
   return (
     <span
       className={cn("inline-flex items-center gap-1.5 text-xs text-muted-foreground", className)}
@@ -26,7 +112,7 @@ export function ProviderIndicator({
         aria-hidden="true"
         className={cn(
           "inline-flex h-5 w-5 items-center justify-center rounded-md",
-          isGmail ? "bg-red-100 text-red-600" : "bg-blue-100 text-blue-600"
+          color
         )}
       >
         <Mail className="h-3 w-3" />

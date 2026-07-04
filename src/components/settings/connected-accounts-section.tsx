@@ -25,6 +25,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { ProviderIndicator, type Provider } from "@/components/review/shared";
 import { toast } from "@/components/ui/use-toast";
 
@@ -70,6 +72,10 @@ export function ConnectedAccountsSection({ isDemo }: { isDemo: boolean }) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState<Mailbox | null>(null);
+  const [imapOpen, setImapOpen] = useState(false);
+  const [imapEmail, setImapEmail] = useState("");
+  const [imapPassword, setImapPassword] = useState("");
+  const [imapBusy, setImapBusy] = useState(false);
 
   async function load() {
     try {
@@ -105,6 +111,32 @@ export function ConnectedAccountsSection({ isDemo }: { isDemo: boolean }) {
       toast.error(err instanceof Error ? err.message : "Couldn't connect mailbox.");
     } finally {
       setConnecting(false);
+    }
+  }
+
+  async function connectImap() {
+    setImapBusy(true);
+    try {
+      const res = await fetch("/api/connected-mailboxes/imap", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: imapEmail.trim(), password: imapPassword }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Couldn't connect mailbox.");
+      toast.success(
+        `Connected ${data?.mailbox?.emailAddress ?? imapEmail.trim()}${
+          data?.detected ? ` (${data.detected})` : ""
+        }. Sync is starting.`
+      );
+      setImapOpen(false);
+      setImapEmail("");
+      setImapPassword("");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn't connect mailbox.");
+    } finally {
+      setImapBusy(false);
     }
   }
 
@@ -150,7 +182,8 @@ export function ConnectedAccountsSection({ isDemo }: { isDemo: boolean }) {
         <div>
           <CardTitle>Connected accounts</CardTitle>
           <CardDescription>
-            Gmail and Outlook mailboxes synced to your Review queue.
+            Gmail, Outlook, and IMAP (iCloud, Yahoo, Fastmail) mailboxes synced
+            to your Review queue.
           </CardDescription>
         </div>
         {!isDemo && (
@@ -171,6 +204,9 @@ export function ConnectedAccountsSection({ isDemo }: { isDemo: boolean }) {
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => connect("outlook")}>
                 <ProviderIndicator provider="outlook" /> Outlook
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setImapOpen(true)}>
+                <ProviderIndicator provider="imap" /> iCloud, Yahoo, Fastmail…
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -243,6 +279,59 @@ export function ConnectedAccountsSection({ isDemo }: { isDemo: boolean }) {
           </ul>
         )}
       </CardContent>
+
+      <Dialog open={imapOpen} onOpenChange={(o) => !o && setImapOpen(false)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect an IMAP mailbox</DialogTitle>
+            <DialogDescription>
+              Works with iCloud, Yahoo, Fastmail, and other IMAP providers.
+              Server settings are detected automatically — just enter your email
+              and an app-specific password (not your normal login password).
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="imap-email">Email address</Label>
+              <Input
+                id="imap-email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@icloud.com"
+                value={imapEmail}
+                onChange={(e) => setImapEmail(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="imap-password">App-specific password</Label>
+              <Input
+                id="imap-password"
+                type="password"
+                autoComplete="off"
+                placeholder="xxxx-xxxx-xxxx-xxxx"
+                value={imapPassword}
+                onChange={(e) => setImapPassword(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Create one in your provider&apos;s security settings. We store it
+                encrypted and use it only to sync your mail.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setImapOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={imapBusy || !imapEmail.trim() || !imapPassword}
+              onClick={() => void connectImap()}
+            >
+              {imapBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Connect
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={confirmDisconnect !== null}

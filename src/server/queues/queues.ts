@@ -63,7 +63,7 @@ export interface TriageJobData {
 export interface MailboxActionJobData {
   userAccountId: string;
   connectedMailboxId: string;
-  action: "archive" | "send" | "reply" | "forward";
+  action: "archive" | "send" | "reply" | "forward" | "unsubscribe";
   emailMetadataId?: string;
   providerMessageId?: string;
   providerThreadId?: string;

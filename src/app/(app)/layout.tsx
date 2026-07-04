@@ -4,7 +4,6 @@ import { getSessionUser } from "@/server/lib/session";
 import { prisma } from "@/server/db/prisma";
 import { AppSidebar, type SidebarFolder } from "@/components/app-sidebar";
 import { ReconnectBanner } from "@/components/reconnect-banner";
-import { SubscriptionBanner } from "@/components/subscription-banner";
 import { Toaster } from "@/components/ui/toaster";
 import { DEFAULT_CATEGORIES } from "@/server/services/category-folders";
 
@@ -22,7 +21,7 @@ export default async function AppLayout({
   const user = await getSessionUser();
   if (!user) redirect("/signin");
 
-  const [folders, disconnected, reviewCount, account] = await Promise.all([
+  const [folders, disconnected, reviewCount] = await Promise.all([
     prisma.categoryFolder.findMany({
       where: { userAccountId: user.id },
       orderBy: { displayOrder: "asc" },
@@ -33,10 +32,6 @@ export default async function AppLayout({
     }),
     prisma.reviewQueueItem.count({
       where: { userAccountId: user.id, status: { in: ["pending", "replied", "forwarded"] } },
-    }),
-    prisma.userAccount.findUnique({
-      where: { id: user.id },
-      select: { subscriptionStatus: true, trialEndsAt: true },
     }),
   ]);
 
@@ -65,12 +60,6 @@ export default async function AppLayout({
         userEmail={user.email}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        {!user.isDemo && (
-          <SubscriptionBanner
-            status={account?.subscriptionStatus ?? "trialing"}
-            trialEndsAt={account?.trialEndsAt ? account.trialEndsAt.toISOString() : null}
-          />
-        )}
         <ReconnectBanner mailboxes={disconnected} />
         <main className="min-w-0 flex-1">{children}</main>
       </div>

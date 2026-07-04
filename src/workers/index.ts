@@ -65,8 +65,21 @@ async function main() {
     console.log(`[worker] registered queue "${name}" (concurrency ${CONCURRENCY[name] ?? 3})`);
   }
 
+  // IMAP mailboxes have no provider push — start IDLE/poll watchers for them.
+  // No-op in preview (placeholder-credential mailboxes can't connect).
+  const { startImapWatchers, stopImapWatchers } = await import(
+    "@/server/queues/workers/imap-idle"
+  ).catch(() => ({
+    startImapWatchers: async () => {},
+    stopImapWatchers: async () => {},
+  }));
+  await startImapWatchers().catch((err) =>
+    console.error("[worker] imap watchers failed to start:", err?.message),
+  );
+
   const shutdown = async () => {
     console.log("[worker] shutting down…");
+    await stopImapWatchers().catch(() => {});
     await Promise.all(workers.map((w) => w.close()));
     process.exit(0);
   };

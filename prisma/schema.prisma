@@ -61,6 +61,7 @@ enum LedgerStatus {
 enum MailboxProvider {
   gmail
   outlook
+  imap
 
   @@map("mailbox_provider")
 }
@@ -229,6 +230,10 @@ model EmailMetadata {
   isFlaggedLowConfidence Boolean   @default(false) @map("is_flagged_low_confidence")
   isArchived             Boolean   @default(false) @map("is_archived")
   hasAttachments         Boolean   @default(false) @map("has_attachments")
+  // One-click unsubscribe target parsed from the List-Unsubscribe header
+  // (metadata only — the mailto:/https: target, never body content).
+  unsubscribeTarget      String?   @map("unsubscribe_target") @db.Text
+  unsubscribeOneClick    Boolean   @default(false) @map("unsubscribe_one_click")
   createdAt              DateTime  @default(now()) @map("created_at") @db.Timestamptz
   updatedAt              DateTime  @updatedAt @map("updated_at") @db.Timestamptz
 

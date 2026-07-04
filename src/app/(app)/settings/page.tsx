@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ checkout?: string; connect?: string }>;
+  searchParams: Promise<{ connect?: string }>;
 }) {
   const user = await getSessionUser();
   if (!user) redirect("/signin");
@@ -19,7 +19,6 @@ export default async function SettingsPage({
       isDemo={user.isDemo}
       userEmail={user.email}
       displayName={user.displayName}
-      checkoutStatus={sp.checkout}
       connectStatus={sp.connect}
     />
   );

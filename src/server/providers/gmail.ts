@@ -122,7 +122,14 @@ export const gmailAdapter: ProviderAdapter = {
       userId: "me",
       id: providerMessageId,
       format: "metadata",
-      metadataHeaders: ["From", "Subject", "Date", "Message-ID"],
+      metadataHeaders: [
+        "From",
+        "Subject",
+        "Date",
+        "Message-ID",
+        "List-Unsubscribe",
+        "List-Unsubscribe-Post",
+      ],
     });
     const msg = res.data;
     const headers = headerMap(msg.payload?.headers ?? undefined);

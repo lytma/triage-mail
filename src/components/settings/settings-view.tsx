@@ -5,31 +5,20 @@ import { toast } from "@/components/ui/use-toast";
 import { ConnectedAccountsSection } from "./connected-accounts-section";
 import { TriageRulesSection } from "./triage-rules-section";
 import { NotificationPrefsSection } from "./notification-prefs-section";
-import { SubscriptionSection } from "./subscription-section";
 import { AccountSection } from "./account-section";
 
 export function SettingsView({
   isDemo,
   userEmail,
   displayName,
-  checkoutStatus,
   connectStatus,
 }: {
   isDemo: boolean;
   userEmail: string;
   displayName: string;
-  checkoutStatus?: string;
   connectStatus?: string;
 }) {
-  // Surface redirect-back toasts from checkout / connect flows once on mount.
-  useEffect(() => {
-    if (checkoutStatus === "success") {
-      toast.success("Subscription active. Thanks for subscribing!");
-    } else if (checkoutStatus === "cancel" || checkoutStatus === "canceled") {
-      toast("Checkout canceled — no changes were made.");
-    }
-  }, [checkoutStatus]);
-
+  // Surface redirect-back toasts from the connect flow once on mount.
   useEffect(() => {
     switch (connectStatus) {
       case "success":
@@ -63,7 +52,6 @@ export function SettingsView({
         <ConnectedAccountsSection isDemo={isDemo} />
         <TriageRulesSection isDemo={isDemo} />
         <NotificationPrefsSection isDemo={isDemo} />
-        {!isDemo && <SubscriptionSection />}
         <AccountSection userEmail={userEmail} displayName={displayName} />
       </div>
     </div>

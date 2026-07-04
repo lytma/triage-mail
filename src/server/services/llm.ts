@@ -23,6 +23,12 @@ export interface ClassifyInput {
   subject?: string;
   snippet?: string;
   headers?: Record<string, string>;
+  /**
+   * Preference hints learned from the user's manual "move to category"
+   * corrections (the gradual AI-feedback loop). Used only by the live model;
+   * the deterministic stub heuristic ignores them.
+   */
+  hints?: string[];
 }
 
 export interface ClassifyResult {
@@ -184,13 +190,24 @@ async function classifyEmailOpenAI(input: ClassifyInput): Promise<ClassifyResult
     headers: input.headers ?? {},
   });
 
+  const messages: { role: "system" | "user"; content: string }[] = [
+    { role: "system", content: SYSTEM_PROMPT },
+  ];
+  // Feed learned corrections as guidance so the model generalizes over time.
+  if (input.hints?.length) {
+    messages.push({
+      role: "system",
+      content:
+        "Consider these learned user preferences from past manual corrections:\n" +
+        input.hints.join("\n"),
+    });
+  }
+  messages.push({ role: "user", content: userContent });
+
   const completion = await client.chat.completions.create({
     model: env.OPENAI_MODEL,
     response_format: { type: "json_object" },
-    messages: [
-      { role: "system", content: SYSTEM_PROMPT },
-      { role: "user", content: userContent },
-    ],
+    messages,
   });
 
   const raw = completion.choices[0]?.message?.content;

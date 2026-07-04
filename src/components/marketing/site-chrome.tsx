@@ -20,17 +20,17 @@ export function SiteHeader() {
           <Link href="/#features" className="hidden text-sm font-medium text-muted-foreground hover:text-foreground sm:block">
             Features
           </Link>
-          <Link href="/pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground">
-            Pricing
+          <Link href="/demo" className="text-sm font-medium text-muted-foreground hover:text-foreground">
+            Demo
           </Link>
           <Link href="/signin" className="text-sm font-medium text-muted-foreground hover:text-foreground">
             Sign in
           </Link>
           <Link
-            href="/pricing"
+            href="/signin"
             className="rounded-btn bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:opacity-90"
           >
-            Start free trial
+            Get started — free
           </Link>
         </nav>
       </div>
@@ -73,15 +73,14 @@ export function SiteFooter() {
             title="Account"
             links={[
               ["Sign in", "/signin"],
-              ["Start free trial", "/pricing"],
-              ["Pricing", "/pricing"],
+              ["Get started — free", "/signin"],
               ["Demo", "/demo"],
             ]}
           />
         </div>
         <div className="flex flex-wrap justify-between gap-4 border-t border-border py-6 text-sm text-muted-foreground">
-          <span>© Triage Mail. Metadata-only storage. Two-way sync with Gmail &amp; Outlook.</span>
-          <span>Monthly &amp; yearly subscription billing</span>
+          <span>© Triage Mail. Metadata-only storage. Two-way sync with Gmail, Outlook &amp; IMAP.</span>
+          <span>Free — no subscription</span>
         </div>
       </div>
     </footer>

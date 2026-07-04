@@ -1,3 +1,4 @@
+import type { MailboxProvider } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import { getProvider } from "@/server/providers";
 import type { ProviderMessage } from "@/server/providers";
@@ -5,6 +6,8 @@ import { getFolderIdForClassification } from "@/server/services/category-folders
 import { classifyEmail, type Classification, type ClassifyResult } from "./llm";
 import { evaluateRules } from "./rules-engine";
 import { recordTriageStats } from "./stats";
+import { parseListUnsubscribe } from "@/server/lib/unsubscribe";
+import { buildClassifierHints } from "./learning";
 
 /**
  * The triage engine — classifies a single incoming email and routes it to the
@@ -49,7 +52,7 @@ export interface TriageResult {
 
 async function resolveMessage(params: TriageParams): Promise<{
   message: ProviderMessage;
-  provider: "gmail" | "outlook";
+  provider: MailboxProvider;
 }> {
   const mailbox = await prisma.connectedMailbox.findUnique({
     where: { id: params.connectedMailboxId },
@@ -148,6 +151,8 @@ export async function triageEmail(params: TriageParams): Promise<TriageResult> {
       subject: message.subject,
       snippet: message.snippet,
       headers: message.headers,
+      // Gradual AI-feedback loop: nudge the model with learned corrections.
+      hints: buildClassifierHints(rules),
     });
   }
 
@@ -189,6 +194,7 @@ export async function triageEmail(params: TriageParams): Promise<TriageResult> {
   const receivedAt = message.receivedAt;
   const senderName = message.senderName ?? null;
   const subject = message.subject ?? null;
+  const unsub = parseListUnsubscribe(message.headers);
 
   const result = await prisma.$transaction(async (tx) => {
     const emailMetadata = await tx.emailMetadata.create({
@@ -205,6 +211,8 @@ export async function triageEmail(params: TriageParams): Promise<TriageResult> {
         isImportant,
         isFlaggedLowConfidence,
         hasAttachments: message.hasAttachments,
+        unsubscribeTarget: unsub.target,
+        unsubscribeOneClick: unsub.oneClick,
         // NOTE: snippet/body intentionally NOT stored.
       },
     });

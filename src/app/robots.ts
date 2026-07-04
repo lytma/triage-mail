@@ -9,7 +9,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: [
       {
         userAgent: "*",
-        allow: ["/", "/pricing", "/demo"],
+        allow: ["/", "/demo"],
         disallow: ["/app/", "/review", "/folders", "/compose", "/settings", "/stats", "/admin", "/api/"],
       },
     ],

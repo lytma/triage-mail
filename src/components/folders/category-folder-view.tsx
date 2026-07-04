@@ -10,6 +10,7 @@ import {
   Search,
   X,
   Info,
+  Ban,
 } from "lucide-react";
 import { toast } from "@/components/ui/use-toast";
 import { Button } from "@/components/ui/button";
@@ -27,9 +28,23 @@ import { cn } from "@/lib/utils";
 import {
   ConfidenceBadge,
   ProviderIndicator,
+  MoveToMenu,
   confidenceIsLow,
   type Provider,
+  type MoveCategory,
 } from "@/components/review/shared";
+
+/** Folder slug → the Classification value it corresponds to (for move exclude). */
+const SLUG_TO_CATEGORY: Record<string, MoveCategory> = {
+  fyi: "fyi",
+  newsletters: "newsletter",
+  marketing: "marketing",
+  receipts: "receipt",
+  automated_notifications: "automated_notification",
+};
+
+/** Folders where a one-click unsubscribe action is offered. */
+const UNSUBSCRIBE_SLUGS = new Set(["marketing", "newsletters"]);
 
 interface FolderEmail {
   id: string;
@@ -42,6 +57,7 @@ interface FolderEmail {
   isFlaggedLowConfidence: boolean;
   isArchived: boolean;
   hasAttachments: boolean;
+  canUnsubscribe: boolean;
   triageReason: string | null;
   triageConfidence: number | null;
 }
@@ -212,6 +228,69 @@ export function CategoryFolderView({
     }
   };
 
+  // Optimistically drop a single row (used by move + unsubscribe).
+  const removeOne = (id: string) => {
+    setRemovingIds((prev) => new Set(prev).add(id));
+    window.setTimeout(() => {
+      setItems((prev) => prev.filter((i) => i.id !== id));
+      setTotal((t) => Math.max(0, t - 1));
+      setRemovingIds((prev) => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+      setSelectedIds((prev) => {
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
+    }, 180);
+  };
+
+  const moveEmail = async (item: FolderEmail, category: MoveCategory) => {
+    if (SLUG_TO_CATEGORY[slug] === category) return; // already in this folder
+    const snapshot = items;
+    removeOne(item.id);
+    try {
+      const res = await fetch(`/api/emails/${item.id}/move`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ classification: category }),
+      });
+      if (!res.ok) throw new Error();
+      toast.success("Moved — I'll file mail from this sender here from now on");
+    } catch {
+      setItems(snapshot);
+      setTotal(snapshot.length);
+      toast.error("Couldn't move — please try again");
+    }
+  };
+
+  const unsubscribeEmail = async (item: FolderEmail) => {
+    const snapshot = items;
+    removeOne(item.id);
+    try {
+      const res = await fetch(`/api/emails/${item.id}/unsubscribe`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Couldn't unsubscribe.");
+      toast.success("Unsubscribe requested", {
+        description:
+          isDemo || !data.syncedToProvider
+            ? "Demo mode — not actually sent."
+            : "We'll unsubscribe you and archive this email.",
+      });
+    } catch (e) {
+      setItems(snapshot);
+      setTotal(snapshot.length);
+      toast.error(e instanceof Error ? e.message : "Couldn't unsubscribe — please try again");
+    }
+  };
+
+  const showUnsubscribe = UNSUBSCRIBE_SLUGS.has(slug);
+  const excludeCategory = SLUG_TO_CATEGORY[slug];
+
   const hasActiveFilters =
     Boolean(debouncedSender) || flaggedOnly || Boolean(dateFrom) || Boolean(dateTo);
 
@@ -361,6 +440,10 @@ export function CategoryFolderView({
                     selected={selectedIds.has(item.id)}
                     removing={removingIds.has(item.id)}
                     onToggle={(shiftKey) => toggleRow(index, shiftKey)}
+                    excludeCategory={excludeCategory}
+                    showUnsubscribe={showUnsubscribe}
+                    onMove={(cat) => void moveEmail(item, cat)}
+                    onUnsubscribe={() => void unsubscribeEmail(item)}
                   />
                 ))}
               </ul>
@@ -402,11 +485,19 @@ function FolderRow({
   selected,
   removing,
   onToggle,
+  excludeCategory,
+  showUnsubscribe,
+  onMove,
+  onUnsubscribe,
 }: {
   item: FolderEmail;
   selected: boolean;
   removing: boolean;
   onToggle: (shiftKey: boolean) => void;
+  excludeCategory?: MoveCategory;
+  showUnsubscribe: boolean;
+  onMove: (category: MoveCategory) => void;
+  onUnsubscribe: () => void;
 }) {
   const low = item.isFlaggedLowConfidence || confidenceIsLow(item.triageConfidence);
   const displayName = item.senderName || item.senderEmail;
@@ -492,6 +583,30 @@ function FolderRow({
           )}
           {item.isArchived && <Badge variant="secondary">Archived</Badge>}
         </div>
+      </div>
+
+      {/* Per-row actions: unsubscribe (marketing/newsletters) + move to category */}
+      <div className="flex shrink-0 items-center gap-0.5">
+        {showUnsubscribe && item.canUnsubscribe && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                aria-label="Unsubscribe from this sender"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onUnsubscribe();
+                }}
+              >
+                <Ban className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Unsubscribe</TooltipContent>
+          </Tooltip>
+        )}
+        <MoveToMenu exclude={excludeCategory} stopPropagation onMove={onMove} />
       </div>
     </li>
   );

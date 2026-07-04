@@ -132,8 +132,8 @@ export async function findOrCreateOAuthUser(input: {
       displayName: input.name,
       authProvider: input.provider,
       authProviderSubject: input.subject,
-      subscriptionStatus: "trialing",
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+      // Free single-user tool — no billing/trial; everyone is "active".
+      subscriptionStatus: "active",
     },
   });
   await seedCategoryFolders(user.id);

@@ -70,14 +70,14 @@ export default function LandingPage() {
             <span className="mk-eyebrow">AI email triage</span>
             <h1 className="mk-hero-title">Only review what actually matters.</h1>
             <p className="mx-auto mb-8 max-w-[640px] text-lg text-muted-foreground">
-              Triage Mail unifies your Gmail and Outlook inboxes and uses a hosted
-              LLM to classify every incoming email — routing the important ones to
-              a Review queue and the rest into category folders. Plain-English
-              rules always override the AI.
+              Triage Mail unifies your Gmail, Outlook, and IMAP (iCloud, Yahoo,
+              Fastmail) inboxes and uses a hosted LLM to classify every incoming
+              email — routing the important ones to a Review queue and the rest
+              into category folders. Plain-English rules always override the AI.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/pricing" className="rounded-btn bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90">
-                Start free trial
+              <Link href="/signin" className="rounded-btn bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground hover:opacity-90">
+                Get started — free
               </Link>
               <Link href="/demo" className="rounded-btn border border-border bg-background px-5 py-3 text-sm font-semibold hover:bg-muted">
                 View demo account
@@ -188,11 +188,11 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[680px]">
             <h2 className="mb-3 font-display text-4xl font-extrabold tracking-tight">Stop reviewing what doesn&apos;t matter.</h2>
             <p className="mb-8 text-lg opacity-90">
-              Start your monthly or yearly subscription. Try the demo account with seeded sample emails first — no setup required.
+              It&apos;s completely free — no subscription, no credit card. Try the demo account with seeded sample emails first — no setup required.
             </p>
             <div className="flex flex-wrap justify-center gap-4">
-              <Link href="/pricing" className="rounded-btn bg-background px-5 py-3 text-sm font-semibold text-primary hover:opacity-90">
-                Start free trial
+              <Link href="/signin" className="rounded-btn bg-background px-5 py-3 text-sm font-semibold text-primary hover:opacity-90">
+                Get started — free
               </Link>
               <Link href="/demo" className="rounded-btn border border-primary-foreground/40 px-5 py-3 text-sm font-semibold text-primary-foreground hover:bg-primary-foreground/10">
                 Explore demo account

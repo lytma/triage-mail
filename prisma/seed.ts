@@ -171,6 +171,20 @@ async function makeEmail(args: MakeEmailArgs): Promise<void> {
   const isArchived = !isImportant && rand(index * 11 + 5) < 0.3;
   const hasAttachments = rand(index * 5 + 2) < 0.25;
 
+  // Marketing/newsletter senders carry a List-Unsubscribe target so the
+  // one-click unsubscribe button shows in those folders.
+  let unsubscribeTarget: string | null = null;
+  let unsubscribeOneClick = false;
+  if (classification === "marketing" || classification === "newsletter") {
+    const domain = content.senderEmail.split("@")[1] ?? "example.com";
+    if (rand(index * 2 + 1) < 0.6) {
+      unsubscribeTarget = `https://${domain}/unsubscribe?u=${providerMsgCounter}`;
+      unsubscribeOneClick = true;
+    } else {
+      unsubscribeTarget = `mailto:unsubscribe@${domain}?subject=unsubscribe`;
+    }
+  }
+
   const email = await prisma.emailMetadata.create({
     data: {
       userAccountId,
@@ -186,6 +200,8 @@ async function makeEmail(args: MakeEmailArgs): Promise<void> {
       isFlaggedLowConfidence: lowConfidence,
       isArchived,
       hasAttachments,
+      unsubscribeTarget,
+      unsubscribeOneClick,
     },
   });
 
@@ -307,52 +323,9 @@ async function seedAdmin(): Promise<void> {
       isDemo: false,
       authProvider: "google",
       authProviderSubject: "seed-admin",
+      // Free single-user tool — no billing/trial.
       subscriptionStatus: "active",
-      subscriptionPlan: "monthly",
-      stripeCustomerId: "cus_seed_admin",
-      trialEndsAt: null,
     },
-  });
-
-  // Subscription + ledger.
-  const subscription = await prisma.subscription.create({
-    data: {
-      userAccountId: admin.id,
-      stripeSubscriptionId: "sub_seed_admin",
-      plan: "monthly",
-      status: "active",
-      currentPeriodStart: new Date(now - 10 * DAY_MS),
-      currentPeriodEnd: new Date(now + 20 * DAY_MS),
-      trialStartedAt: new Date(now - 30 * DAY_MS),
-      trialEndsAt: new Date(now - 16 * DAY_MS),
-    },
-  });
-
-  await prisma.subscriptionLedgerEntry.createMany({
-    data: [
-      {
-        subscriptionId: subscription.id,
-        userAccountId: admin.id,
-        entryType: "trial_start",
-        amountCents: 0,
-        currency: "USD",
-        status: "succeeded",
-        description: "14-day trial started",
-        recordedAt: new Date(now - 30 * DAY_MS),
-      },
-      {
-        subscriptionId: subscription.id,
-        userAccountId: admin.id,
-        stripeInvoiceId: "in_seed_admin_1",
-        stripeChargeId: "ch_seed_admin_1",
-        entryType: "charge",
-        amountCents: 1200,
-        currency: "USD",
-        status: "succeeded",
-        description: "Monthly subscription — Triage Mail",
-        recordedAt: new Date(now - 10 * DAY_MS),
-      },
-    ],
   });
 
   await seedCategoryFolders(admin.id);
@@ -381,7 +354,18 @@ async function seedAdmin(): Promise<void> {
       providerHistoryId: "hist-admin-outlook-1",
     },
   });
-  const mailboxes = [gmail, outlook];
+  // An IMAP mailbox (iCloud) — placeholder app password keeps it in stub mode.
+  const icloud = await prisma.connectedMailbox.create({
+    data: {
+      userAccountId: admin.id,
+      provider: "imap",
+      emailAddress: "alex.morgan@icloud.com",
+      oauthRefreshTokenEncrypted: encryptToken("seed-imap-app-password-placeholder"),
+      syncState: "active",
+      lastSyncedAt: new Date(now - 3 * 60 * 60 * 1000),
+    },
+  });
+  const mailboxes = [gmail, outlook, icloud];
 
   // Rules.
   const ruleAccountant = await prisma.triageRule.create({
@@ -409,6 +393,20 @@ async function seedAdmin(): Promise<void> {
       targetClassification: "marketing",
       targetCategoryFolderId: folderIdForSlug("marketing") ?? null,
       priority: 5,
+      isActive: true,
+    },
+  });
+  // A learned rule from a past manual "move to category" correction.
+  await prisma.triageRule.create({
+    data: {
+      userAccountId: admin.id,
+      plainEnglishText: "[Learned] File email from deals@gadgetstore.com as Marketing",
+      parsedConditions: {
+        all: [{ field: "sender_email", op: "equals", value: "deals@gadgetstore.com" }],
+      },
+      targetClassification: "marketing",
+      targetCategoryFolderId: folderIdForSlug("marketing") ?? null,
+      priority: 100,
       isActive: true,
     },
   });
@@ -497,7 +495,8 @@ async function seedAdmin(): Promise<void> {
     { name: "review_queue_cleared", props: {} },
     { name: "mailbox_connected", props: { provider: "gmail" } },
     { name: "rule_created", props: {} },
-    { name: "subscription_started", props: { plan: "monthly" } },
+    { name: "email_moved", props: { to: "marketing", learned_rule: "created" } },
+    { name: "email_unsubscribe_requested", props: { category: "marketing", one_click: true } },
     { name: "email_triaged", props: { category: "receipt" } },
     { name: "mailbox_connected", props: { provider: "outlook" } },
     { name: "review_queue_cleared", props: {} },
@@ -525,8 +524,7 @@ async function seedDemo(): Promise<void> {
       passwordHash,
       isAdmin: false,
       isDemo: true,
-      subscriptionStatus: "trialing",
-      trialEndsAt: new Date(now + 14 * DAY_MS),
+      subscriptionStatus: "active",
     },
   });
 
@@ -543,10 +541,11 @@ async function seedDemo(): Promise<void> {
   await seedCategoryFolders(demo.id);
   const folderIdForSlug = await folderLookup(demo.id);
 
-  const mailboxDefs: { provider: "gmail" | "outlook"; email: string }[] = [
+  const mailboxDefs: { provider: "gmail" | "outlook" | "imap"; email: string }[] = [
     { provider: "gmail", email: "demo.work@gmail.com" },
     { provider: "gmail", email: "demo.personal@gmail.com" },
     { provider: "outlook", email: "demo@outlook.com" },
+    { provider: "imap", email: "demo@icloud.com" },
   ];
   const mailboxes: ConnectedMailbox[] = [];
   for (const [i, def] of mailboxDefs.entries()) {

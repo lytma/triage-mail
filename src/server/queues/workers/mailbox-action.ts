@@ -1,7 +1,8 @@
 import type { Job } from "bullmq";
+import type { ConnectedMailbox } from "@prisma/client";
 import { prisma } from "@/server/db/prisma";
 import type { MailboxActionJobData } from "@/server/queues/queues";
-import { getProvider } from "@/server/providers";
+import { getProvider, type ProviderAdapter } from "@/server/providers";
 
 /**
  * Mailbox-action worker: performs two-way-sync side effects on the provider
@@ -45,6 +46,10 @@ export async function processMailboxAction(
       return { archived: data.providerMessageId };
     }
 
+    if (data.action === "unsubscribe") {
+      return await performUnsubscribe(data, mailbox, provider);
+    }
+
     // send / reply / forward
     const payload = data.payload ?? {};
     const sent = await provider.sendMessage(mailbox, {
@@ -76,4 +81,91 @@ export async function processMailboxAction(
     }
     throw err;
   }
+}
+
+/**
+ * One-click unsubscribe. Uses the parsed List-Unsubscribe target:
+ *  - RFC 8058 one-click → HTTPS POST with `List-Unsubscribe=One-Click`
+ *  - other HTTPS link   → HTTPS GET
+ *  - mailto: target     → send an unsubscribe email via the mailbox
+ * Then archives the message. Unsubscribe is best-effort: a failed HTTP call is
+ * logged but does not throw (senders' endpoints are unreliable).
+ */
+async function performUnsubscribe(
+  data: MailboxActionJobData,
+  mailbox: ConnectedMailbox,
+  provider: ProviderAdapter,
+): Promise<unknown> {
+  if (!data.emailMetadataId) {
+    throw new Error("unsubscribe action requires emailMetadataId");
+  }
+  const email = await prisma.emailMetadata.findFirst({
+    where: { id: data.emailMetadataId, userAccountId: data.userAccountId },
+    select: {
+      unsubscribeTarget: true,
+      unsubscribeOneClick: true,
+      providerMessageId: true,
+    },
+  });
+  if (!email?.unsubscribeTarget) {
+    return { unsubscribed: false, reason: "no unsubscribe target" };
+  }
+
+  const target = email.unsubscribeTarget;
+  try {
+    if (/^https?:\/\//i.test(target)) {
+      if (email.unsubscribeOneClick) {
+        await fetch(target, {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "List-Unsubscribe=One-Click",
+        });
+      } else {
+        await fetch(target, { method: "GET" });
+      }
+    } else if (/^mailto:/i.test(target)) {
+      const { address, subject } = parseMailto(target);
+      if (address) {
+        await provider.sendMessage(mailbox, {
+          to: [address],
+          subject: subject || "unsubscribe",
+          body: "unsubscribe",
+        });
+      }
+    }
+  } catch (err) {
+    console.error(
+      `[worker:mailbox-action] unsubscribe request failed (best-effort): ${
+        (err as Error).message
+      }`,
+    );
+  }
+
+  // Archive the message so it leaves the folder (best-effort, guarded above).
+  if (email.providerMessageId) {
+    try {
+      await provider.archiveMessage(mailbox, email.providerMessageId);
+    } catch (err) {
+      if (isAuthError(err)) throw err;
+      console.error(
+        `[worker:mailbox-action] post-unsubscribe archive failed: ${
+          (err as Error).message
+        }`,
+      );
+    }
+  }
+
+  return { unsubscribed: true, target };
+}
+
+/** Parse a `mailto:addr?subject=...` URI into address + subject. */
+function parseMailto(uri: string): { address: string; subject: string } {
+  const withoutScheme = uri.replace(/^mailto:/i, "");
+  const [addr, query] = withoutScheme.split("?");
+  let subject = "";
+  if (query) {
+    const params = new URLSearchParams(query);
+    subject = params.get("subject") ?? "";
+  }
+  return { address: addr.trim(), subject };
 }

@@ -71,6 +71,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ folderId
         isFlaggedLowConfidence: r.isFlaggedLowConfidence,
         isArchived: r.isArchived,
         hasAttachments: r.hasAttachments,
+        canUnsubscribe: Boolean(r.unsubscribeTarget),
         triageReason: r.triageDecision?.reason ?? null,
         triageConfidence: r.triageDecision ? Number(r.triageDecision.confidenceScore) : null,
       })),
